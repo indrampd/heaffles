@@ -1,3 +1,5 @@
+import gsap from "gsap";
+
 class Button {
 	constructor(buttonElement) {
 		this.block = buttonElement;

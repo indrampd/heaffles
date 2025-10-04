@@ -5,13 +5,8 @@ import calculateInitialTransform from "./utils/calculateInitialTransform";
 
 import Swiper from "swiper";
 
-Swiper.use([Navigation, Pagination, A11y, EffectFade]);
-
 // Import Swiper styles
 import "swiper/css";
-import "swiper/css/navigation";
-import "swiper/css/pagination";
-import "swiper/css/scrollbar";
 
 import * as THREE from "three";
 

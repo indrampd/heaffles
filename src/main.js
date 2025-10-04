@@ -3,9 +3,6 @@ import Lenis from "lenis";
 import Button from "./utils/button";
 import calculateInitialTransform from "./utils/calculateInitialTransform";
 
-// Import Swiper styles
-import "swiper/css";
-
 import * as THREE from "three";
 
 import { resizeThreeCanvas } from "./utils/resizeThreeCanvas";
@@ -19,9 +16,6 @@ import baseVertex from "./shader/baseVertex.glsl";
 import baseFragment from "./shader/baseFragment.glsl";
 import effectVertex from "./shader/effectVertex.glsl";
 import effectFragment from "./shader/effectFragment.glsl";
-import CustomEase from "gsap/CustomEase";
-import { SplitText } from "gsap/SplitText";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(SplitText, CustomEase, ScrollTrigger);
 

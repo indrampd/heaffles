@@ -3,8 +3,6 @@ import Lenis from "lenis";
 import Button from "./utils/button";
 import calculateInitialTransform from "./utils/calculateInitialTransform";
 
-import Swiper from "swiper";
-
 // Import Swiper styles
 import "swiper/css";
 

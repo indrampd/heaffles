@@ -1147,49 +1147,53 @@ function inspireAnim() {
 
 	gsap.context(() => {
 		gsap.set(".btn_main_wrap", { pointerEvents: "none" });
-		gsap.timeline({
-			defaults: { duration: 1 },
-			scrollTrigger: {
-				trigger: ".inspire_title",
-				start: "clamp(top center)",
-				end: "clamp(bottom center)",
-				toggleActions: "play none none none",
-			},
-			onComplete: () => {
-				gsap.set(".btn_main_wrap", { clearProps: "pointerEvents" });
-			},
-		})
-			.from(".inspire_span .char", {
-				yPercent: 110,
-				autoAlpha: 0,
-				stagger: 0.01,
-			})
-			.to(
-				".inspire_span:nth-child(3)",
-				{
-					autoAlpha: 1,
-					color: "#ff3b30",
-					stagger: 0.05,
+		const mm = gsap.matchMedia();
+
+		mm.add("(min-width: 992px", () => {
+			gsap.timeline({
+				defaults: { duration: 1 },
+				scrollTrigger: {
+					trigger: ".inspire_title",
+					start: "clamp(top center)",
+					end: "clamp(bottom center)",
+					toggleActions: "play none none none",
 				},
-				"<80%"
-			)
-			.to(".inspire_span .char", {
-				yPercent: -110,
-				autoAlpha: 0,
-				stagger: 0.01,
+				onComplete: () => {
+					gsap.set(".btn_main_wrap", { clearProps: "pointerEvents" });
+				},
 			})
-			.fromTo(
-				".btn_main_wrap",
-				{ "--stroke-radius": "0turn" },
-				{ "--stroke-radius": "1turn" },
-				"<80%"
-			)
-			.fromTo(
-				".btn_main_text .char",
-				{ yPercent: 110 },
-				{ yPercent: 0, stagger: 0.01, clearProps: "transform" },
-				"<"
-			);
+				.from(".inspire_span .char", {
+					yPercent: 110,
+					autoAlpha: 0,
+					stagger: 0.01,
+				})
+				.to(
+					".inspire_span:nth-child(3)",
+					{
+						autoAlpha: 1,
+						color: "#ff3b30",
+						stagger: 0.05,
+					},
+					"<80%"
+				)
+				.to(".inspire_span .char", {
+					yPercent: -110,
+					autoAlpha: 0,
+					stagger: 0.01,
+				})
+				.fromTo(
+					".btn_main_wrap",
+					{ "--stroke-radius": "0turn" },
+					{ "--stroke-radius": "1turn" },
+					"<80%"
+				)
+				.fromTo(
+					".btn_main_text .char",
+					{ yPercent: 110 },
+					{ yPercent: 0, stagger: 0.01, clearProps: "transform" },
+					"<"
+				);
+		});
 
 		const prevDelay = gsap.utils.distribute({
 			base: 0,

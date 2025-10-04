@@ -19,6 +19,9 @@ import baseVertex from "./shader/baseVertex.glsl";
 import baseFragment from "./shader/baseFragment.glsl";
 import effectVertex from "./shader/effectVertex.glsl";
 import effectFragment from "./shader/effectFragment.glsl";
+import CustomEase from "gsap/CustomEase";
+import { SplitText } from "gsap/SplitText";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(SplitText, CustomEase, ScrollTrigger);
 

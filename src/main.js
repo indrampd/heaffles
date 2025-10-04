@@ -33,14 +33,7 @@ let scroll = {
 	scrollVelocity: 0,
 };
 
-const lenis = new Lenis({
-	lerp: 0.125,
-	wheelMultiplier: 0.8,
-	gestureOrientation: "vertical",
-	normalizeWheel: false,
-	smoothTouch: false,
-	autoRaf: true,
-});
+const lenis = new Lenis();
 
 lenis.on("scroll", (e) => {
 	scroll.scrollY = window.scrollY;
@@ -67,8 +60,6 @@ function initShaderOnScroll() {
 		);
 		return;
 	}
-
-	gsap.registerPlugin(CustomEase);
 
 	// Constants
 	const CAMERA_POS = 500;
@@ -343,11 +334,6 @@ function initShaderOnScroll() {
 			.filter(Boolean); // Remove any null entries
 	};
 
-	// Remove global positioning since each canvas is positioned individually
-	const setPositions = () => {
-		// No longer needed - each canvas is positioned relative to its image
-	};
-
 	// Shader setup
 	let observer;
 	let mediaStore;
@@ -492,21 +478,21 @@ function initShaderOnScroll() {
 	});
 }
 
-// // Initialize when DOM is ready
-// if (document.readyState === "loading") {
-// 	document.addEventListener("DOMContentLoaded", initShaderOnScroll);
-// } else {
-// 	// DOM is already ready
-// 	initShaderOnScroll();
-// }
+// Initialize when DOM is ready
+if (document.readyState === "loading") {
+	document.addEventListener("DOMContentLoaded", initShaderOnScroll);
+} else {
+	// DOM is already ready
+	initShaderOnScroll();
+}
 
-// // Initialize when DOM is ready
-// if (document.readyState === "loading") {
-// 	document.addEventListener("DOMContentLoaded", initShaderOnScroll);
-// } else {
-// 	// DOM is already ready
-// 	initShaderOnScroll();
-// }
+// Initialize when DOM is ready
+if (document.readyState === "loading") {
+	document.addEventListener("DOMContentLoaded", initShaderOnScroll);
+} else {
+	// DOM is already ready
+	initShaderOnScroll();
+}
 
 function initSplit() {
 	const lineTargets = document.querySelectorAll('[data-split="lines"]');
@@ -1719,7 +1705,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 	customCursor();
 	applySlowZoomEffect();
-	initShaderOnScroll();
 
 	document.fonts.ready.then(() => {
 		preloadImages().then(() => {

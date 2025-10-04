@@ -2,6 +2,7 @@ import gsap from "gsap";
 import Lenis from "lenis";
 import Button from "./utils/button";
 import calculateInitialTransform from "./utils/calculateInitialTransform";
+import Swiper from "swiper";
 
 import * as THREE from "three";
 

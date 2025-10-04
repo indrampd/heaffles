@@ -8,13 +8,14 @@ export default defineConfig({
 		outDir: "dist",
 		minify: "terser",
 		rollupOptions: {
-			input: "./src/main.js",
+			input: {
+				main: "./src/main.js",
+			},
 			output: {
-				entryFileNames: "index.min.js",
-				chunkFileNames: "index.min.js",
-				assetFileNames: "index.[ext]",
+				entryFileNames: "[name].min.js",
+				chunkFileNames: "[name]-[hash].js",
+				assetFileNames: "assets/[name].[ext]",
 				format: "iife",
-				name: "ScriptInit",
 			},
 		},
 		sourcemap: false,

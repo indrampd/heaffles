@@ -2,6 +2,7 @@ import gsap from "gsap";
 import Lenis from "lenis";
 import Button from "./utils/button";
 import calculateInitialTransform from "./utils/calculateInitialTransform";
+import barba from "@barba/core";
 
 import * as THREE from "three";
 
@@ -16,6 +17,10 @@ import baseVertex from "./shader/baseVertex.glsl";
 import baseFragment from "./shader/baseFragment.glsl";
 import effectVertex from "./shader/effectVertex.glsl";
 import effectFragment from "./shader/effectFragment.glsl";
+import { linkToFlip } from "./utils/linkToFlip.js";
+import { cleanupAnimations } from "./utils/cleanupAnimations.js";
+import { resetWebflow } from "./utils/resetWebflow.js";
+import { cleanupShaderOnScroll } from "./utils/cleanupShaderOnScroll.js";
 
 gsap.registerPlugin(SplitText, CustomEase, ScrollTrigger);
 
@@ -47,8 +52,16 @@ function scrollRaf(time) {
 
 requestAnimationFrame(scrollRaf);
 
-// Main initialization function that runs when DOM is ready
+let shaderInitialized = false;
+let shaderRenderLoop = null;
+
 function initShaderOnScroll() {
+	// Prevent duplicate initialization
+	if (shaderInitialized) {
+		console.log("Shader already initialized, skipping...");
+		return;
+	}
+
 	// Check if required elements exist
 	const mediaElements = document.querySelectorAll(
 		"[data-webgl-media='true']"
@@ -60,6 +73,9 @@ function initShaderOnScroll() {
 		);
 		return;
 	}
+
+	// Mark as initialized
+	shaderInitialized = true;
 
 	// Constants
 	const CAMERA_POS = 500;
@@ -93,18 +109,20 @@ function initShaderOnScroll() {
 		cursorRaf = requestAnimationFrame(lerpCursorPos);
 	};
 
-	window.addEventListener("mousemove", (event) => {
+	const handleMouseMove = (event) => {
 		cursorPos.target.x = event.clientX / window.innerWidth;
 		cursorPos.target.y = event.clientY / window.innerHeight;
 
 		if (!cursorRaf) {
 			cursorRaf = requestAnimationFrame(lerpCursorPos);
 		}
-	});
+	};
+
+	window.addEventListener("mousemove", handleMouseMove);
 
 	// helper for image-to-webgl and uniform updates
-	// this lerps when entering the texture with cursor
 	const handleMouseEnter = (index) => {
+		if (!mediaStore[index]) return;
 		gsap.to(mediaStore[index], {
 			mouseEnter: 1,
 			duration: 0.6,
@@ -112,8 +130,8 @@ function initShaderOnScroll() {
 		});
 	};
 
-	// this updates the cursor position uniform on the texture
 	const handleMousePos = (e, index) => {
+		if (!mediaStore[index]) return;
 		const bounds = mediaStore[index].media.getBoundingClientRect();
 		const x = e.offsetX / bounds.width;
 		const y = e.offsetY / bounds.height;
@@ -122,8 +140,8 @@ function initShaderOnScroll() {
 		mediaStore[index].mouseOverPos.target.y = y;
 	};
 
-	// this lerps when leaving the texture with cursor
 	const handleMouseLeave = (index) => {
+		if (!mediaStore[index]) return;
 		gsap.to(mediaStore[index], {
 			mouseEnter: 0,
 			duration: 0.6,
@@ -143,13 +161,8 @@ function initShaderOnScroll() {
 			...document.querySelectorAll("[data-webgl-media='true']"),
 		];
 
-		// console.log(
-		// 	`Found ${media.length} images with data-webgl-media="true"`
-		// );
-
 		mediaStore = media
 			.map((media, i) => {
-				// console.log(`Processing image ${i}:`, media);
 				observer.observe(media);
 
 				media.dataset.index = String(i);
@@ -161,7 +174,6 @@ function initShaderOnScroll() {
 
 				const bounds = media.getBoundingClientRect();
 
-				// Create individual canvas for this image
 				let canvas = media.nextElementSibling;
 				if (!canvas || canvas.tagName !== "CANVAS") {
 					canvas = document.createElement("canvas");
@@ -173,27 +185,20 @@ function initShaderOnScroll() {
 					canvas.style.pointerEvents = "none";
 					canvas.style.zIndex = "0";
 
-					// Make parent relative if not already positioned
 					const parent = media.parentNode;
 					const parentStyle = getComputedStyle(parent);
 					if (parentStyle.position === "static") {
 						parent.style.position = "relative";
 					}
 
-					// Insert canvas as next sibling to media element
 					media.parentNode.insertBefore(canvas, media.nextSibling);
-					// console.log(`Canvas created for image ${i}`, canvas);
-				} else {
-					console.log(`Canvas already exists for image ${i}`, canvas);
 				}
 
-				// Verify canvas is properly referenced
 				if (!canvas) {
 					console.error(`Canvas is null for image ${i}!`);
 					return null;
 				}
 
-				// Create individual scene and renderer for this image
 				const individualScene = new THREE.Scene();
 				const camera = new THREE.PerspectiveCamera(
 					50,
@@ -215,7 +220,6 @@ function initShaderOnScroll() {
 					renderer.setPixelRatio(
 						Math.min(window.devicePixelRatio, 2)
 					);
-					// Set clear color to transparent
 					renderer.setClearColor(0x000000, 0);
 
 					const imageMaterial = material.clone();
@@ -223,7 +227,6 @@ function initShaderOnScroll() {
 
 					let texture = null;
 
-					// Create texture with proper CORS and WebGL handling
 					const createTexture = (imageElement) => {
 						const tex = new THREE.Texture(imageElement);
 						tex.wrapS = THREE.ClampToEdgeWrapping;
@@ -235,7 +238,6 @@ function initShaderOnScroll() {
 						return tex;
 					};
 
-					// Try to load image with CORS handling
 					if (media.src && media.tagName.toLowerCase() === "img") {
 						const img = new Image();
 						img.crossOrigin = "anonymous";
@@ -250,7 +252,6 @@ function initShaderOnScroll() {
 						};
 
 						img.onerror = () => {
-							// Fallback: use original image without CORS
 							console.warn(
 								"CORS loading failed for image, using original:",
 								media.src
@@ -265,7 +266,6 @@ function initShaderOnScroll() {
 
 						img.src = media.src;
 					} else {
-						// Fallback for non-image elements or images without src
 						texture = createTexture(media);
 						imageMaterial.uniforms.uTexture.value = texture;
 						imageMaterial.uniforms.uTextureSize.value.x =
@@ -279,19 +279,16 @@ function initShaderOnScroll() {
 					imageMaterial.uniforms.uBorderRadius.value =
 						getComputedStyle(media).borderRadius.replace("px", "");
 
-					// Calculate proper scale to fill viewport while maintaining proper deformation
 					const fov = camera.fov * (Math.PI / 180);
 					const distance = camera.position.z;
 					const height = 2 * Math.tan(fov / 2) * distance;
 					const width = height * camera.aspect;
 
-					// Scale to fill viewport for proper rendering
 					imageMesh.scale.set(width, height, 1);
 					imageMesh.position.set(0, 0, 0);
 
 					individualScene.add(imageMesh);
 
-					// Check for hover-only mode using dedicated attribute
 					const hoverOnly =
 						media.getAttribute("data-webgl-hover-only") === "true";
 
@@ -311,7 +308,7 @@ function initShaderOnScroll() {
 							bounds.top >= -500 &&
 							bounds.top <= window.innerHeight + 500,
 						mouseEnter: 0,
-						hoverOnly, // Store the hover-only setting
+						hoverOnly,
 						mouseOverPos: {
 							current: {
 								x: 0.5,
@@ -331,7 +328,7 @@ function initShaderOnScroll() {
 					return null;
 				}
 			})
-			.filter(Boolean); // Remove any null entries
+			.filter(Boolean);
 	};
 
 	// Shader setup
@@ -340,13 +337,12 @@ function initShaderOnScroll() {
 	let geometry;
 	let material;
 
-	// create intersection observer to only render in view elements
 	observer = new IntersectionObserver(
 		(entries) => {
 			entries.forEach((entry) => {
 				const index = entry.target.dataset.index;
 
-				if (index) {
+				if (index && mediaStore[parseInt(index)]) {
 					mediaStore[parseInt(index)].isInView = entry.isIntersecting;
 				}
 			});
@@ -354,7 +350,6 @@ function initShaderOnScroll() {
 		{ rootMargin: "500px 0px 500px 0px" }
 	);
 
-	// geometry and material template (will be cloned for each image)
 	geometry = new THREE.PlaneGeometry(1, 1, 100, 100);
 	material = new THREE.ShaderMaterial({
 		uniforms: {
@@ -376,17 +371,16 @@ function initShaderOnScroll() {
 		glslVersion: THREE.GLSL3,
 	});
 
-	// render loop - now renders each individual canvas
 	const render = (time = 0) => {
 		time /= 1000;
 
 		if (!mediaStore || mediaStore.length === 0) {
-			requestAnimationFrame(render);
+			shaderRenderLoop = requestAnimationFrame(render);
 			return;
 		}
 
 		mediaStore.forEach((object) => {
-			if (!object) return; // Skip null objects
+			if (!object) return;
 
 			if (object.isInView) {
 				object.mouseOverPos.current.x = lerp(
@@ -405,7 +399,6 @@ function initShaderOnScroll() {
 				object.material.uniforms.uTime.value = time;
 				object.material.uniforms.uCursor.value.x = cursorPos.current.x;
 				object.material.uniforms.uCursor.value.y = cursorPos.current.y;
-				// Apply scroll velocity only if not hover-only mode
 				object.material.uniforms.uScrollVelocity.value =
 					object.hoverOnly ? 0 : scroll.scrollVelocity;
 				object.material.uniforms.uMouseOverPos.value.x =
@@ -414,85 +407,499 @@ function initShaderOnScroll() {
 					object.mouseOverPos.current.y;
 				object.material.uniforms.uMouseEnter.value = object.mouseEnter;
 
-				// Render this individual canvas
 				object.renderer.render(object.scene, object.camera);
 			}
 		});
 
-		requestAnimationFrame(render);
+		shaderRenderLoop = requestAnimationFrame(render);
 	};
 
-	window.addEventListener(
-		"resize",
-		debounce(() => {
-			mediaStore.forEach((object) => {
-				const bounds = object.media.getBoundingClientRect();
+	const handleResize = debounce(() => {
+		if (!mediaStore) return;
 
-				// Update canvas size
-				object.renderer.setSize(bounds.width, bounds.height);
+		mediaStore.forEach((object) => {
+			if (!object) return;
 
-				// Update camera aspect ratio
-				object.camera.aspect = bounds.width / bounds.height;
-				object.camera.fov = calcFov(CAMERA_POS);
-				object.camera.updateProjectionMatrix();
+			const bounds = object.media.getBoundingClientRect();
 
-				// Recalculate scale to fill viewport
-				const fov = object.camera.fov * (Math.PI / 180);
-				const distance = object.camera.position.z;
-				const height = 2 * Math.tan(fov / 2) * distance;
-				const width = height * object.camera.aspect;
+			object.renderer.setSize(bounds.width, bounds.height);
 
-				object.mesh.scale.set(width, height, 1);
-				object.width = bounds.width;
-				object.height = bounds.height;
-				object.top = bounds.top + scroll.scrollY;
-				object.left = bounds.left;
-				object.isInView =
-					bounds.top >= -500 &&
-					bounds.top <= window.innerHeight + 500;
+			object.camera.aspect = bounds.width / bounds.height;
+			object.camera.fov = calcFov(CAMERA_POS);
+			object.camera.updateProjectionMatrix();
 
-				// Update material uniforms
-				object.material.uniforms.uResolution.value.x = bounds.width;
-				object.material.uniforms.uResolution.value.y = bounds.height;
-				object.material.uniforms.uTextureSize.value.x =
-					object.media.naturalWidth || 1;
-				object.material.uniforms.uTextureSize.value.y =
-					object.media.naturalHeight || 1;
-				object.material.uniforms.uQuadSize.value.x = bounds.width;
-				object.material.uniforms.uQuadSize.value.y = bounds.height;
-				object.material.uniforms.uBorderRadius.value = getComputedStyle(
-					object.media
-				).borderRadius.replace("px", "");
-			});
-		})
-	);
+			const fov = object.camera.fov * (Math.PI / 180);
+			const distance = object.camera.position.z;
+			const height = 2 * Math.tan(fov / 2) * distance;
+			const width = height * object.camera.aspect;
 
-	// Add the preloader logic
-	window.addEventListener("load", () => {
-		// media details
-		setMediaStore(scroll.scrollY);
+			object.mesh.scale.set(width, height, 1);
+			object.width = bounds.width;
+			object.height = bounds.height;
+			object.top = bounds.top + scroll.scrollY;
+			object.left = bounds.left;
+			object.isInView =
+				bounds.top >= -500 && bounds.top <= window.innerHeight + 500;
 
-		requestAnimationFrame(render);
-
-		document.body.classList.remove("loading");
+			object.material.uniforms.uResolution.value.x = bounds.width;
+			object.material.uniforms.uResolution.value.y = bounds.height;
+			object.material.uniforms.uTextureSize.value.x =
+				object.media.naturalWidth || 1;
+			object.material.uniforms.uTextureSize.value.y =
+				object.media.naturalHeight || 1;
+			object.material.uniforms.uQuadSize.value.x = bounds.width;
+			object.material.uniforms.uQuadSize.value.y = bounds.height;
+			object.material.uniforms.uBorderRadius.value = getComputedStyle(
+				object.media
+			).borderRadius.replace("px", "");
+		});
 	});
+
+	window.addEventListener("resize", handleResize);
+
+	// Initialize media store and start render loop
+	setMediaStore(scroll.scrollY);
+	shaderRenderLoop = requestAnimationFrame(render);
 }
 
-// Initialize when DOM is ready
-if (document.readyState === "loading") {
-	document.addEventListener("DOMContentLoaded", initShaderOnScroll);
-} else {
-	// DOM is already ready
-	initShaderOnScroll();
-}
+// // Main initialization function that runs when DOM is ready
+// function initShaderOnScroll() {
+// 	if (shaderInitialized) {
+// 		console.log("Shader already initialized, skipping...");
+// 		return;
+// 	}
+// 	// Check if required elements exist
+// 	const mediaElements = document.querySelectorAll(
+// 		"[data-webgl-media='true']"
+// 	);
 
-// Initialize when DOM is ready
-if (document.readyState === "loading") {
-	document.addEventListener("DOMContentLoaded", initShaderOnScroll);
-} else {
-	// DOM is already ready
-	initShaderOnScroll();
-}
+// 	if (mediaElements.length === 0) {
+// 		console.warn(
+// 			"ShaderOnScroll: No elements with [data-webgl-media='true'] attribute found. Lenis smooth scroll is still active."
+// 		);
+// 		return;
+// 	}
+
+// 	shaderInitialized = true;
+
+// 	// Constants
+// 	const CAMERA_POS = 500;
+
+// 	// cursor position
+// 	let cursorPos = {
+// 		current: { x: 0.5, y: 0.5 },
+// 		target: { x: 0.5, y: 0.5 },
+// 	};
+
+// 	let cursorRaf;
+
+// 	const lerpCursorPos = () => {
+// 		const x = lerp(cursorPos.current.x, cursorPos.target.x, 0.05);
+// 		const y = lerp(cursorPos.current.y, cursorPos.target.y, 0.05);
+
+// 		cursorPos.current.x = x;
+// 		cursorPos.current.y = y;
+
+// 		const delta = Math.sqrt(
+// 			(cursorPos.target.x - cursorPos.current.x) ** 2 +
+// 				(cursorPos.target.y - cursorPos.current.y) ** 2
+// 		);
+
+// 		if (delta < 0.001 && cursorRaf) {
+// 			cancelAnimationFrame(cursorRaf);
+// 			cursorRaf = null;
+// 			return;
+// 		}
+
+// 		cursorRaf = requestAnimationFrame(lerpCursorPos);
+// 	};
+
+// 	window.addEventListener("mousemove", (event) => {
+// 		cursorPos.target.x = event.clientX / window.innerWidth;
+// 		cursorPos.target.y = event.clientY / window.innerHeight;
+
+// 		if (!cursorRaf) {
+// 			cursorRaf = requestAnimationFrame(lerpCursorPos);
+// 		}
+// 	});
+
+// 	// helper for image-to-webgl and uniform updates
+// 	// this lerps when entering the texture with cursor
+// 	const handleMouseEnter = (index) => {
+// 		gsap.to(mediaStore[index], {
+// 			mouseEnter: 1,
+// 			duration: 0.6,
+// 			ease: CustomEase.create("custom", "0.4, 0, 0.2, 1"),
+// 		});
+// 	};
+
+// 	// this updates the cursor position uniform on the texture
+// 	const handleMousePos = (e, index) => {
+// 		const bounds = mediaStore[index].media.getBoundingClientRect();
+// 		const x = e.offsetX / bounds.width;
+// 		const y = e.offsetY / bounds.height;
+
+// 		mediaStore[index].mouseOverPos.target.x = x;
+// 		mediaStore[index].mouseOverPos.target.y = y;
+// 	};
+
+// 	// this lerps when leaving the texture with cursor
+// 	const handleMouseLeave = (index) => {
+// 		gsap.to(mediaStore[index], {
+// 			mouseEnter: 0,
+// 			duration: 0.6,
+// 			ease: CustomEase.create("custom", "0.4, 0, 0.2, 1"),
+// 		});
+// 		gsap.to(mediaStore[index].mouseOverPos.target, {
+// 			x: 0.5,
+// 			y: 0.5,
+// 			duration: 0.6,
+// 			ease: CustomEase.create("custom", "0.4, 0, 0.2, 1"),
+// 		});
+// 	};
+
+// 	// this gets all image html tags and creates individual canvas and renderer for each
+// 	const setMediaStore = (scrollY) => {
+// 		const media = [
+// 			...document.querySelectorAll("[data-webgl-media='true']"),
+// 		];
+
+// 		// console.log(
+// 		// 	`Found ${media.length} images with data-webgl-media="true"`
+// 		// );
+
+// 		mediaStore = media
+// 			.map((media, i) => {
+// 				// console.log(`Processing image ${i}:`, media);
+// 				observer.observe(media);
+
+// 				media.dataset.index = String(i);
+// 				media.addEventListener("mouseenter", () => handleMouseEnter(i));
+// 				media.addEventListener("mousemove", (e) =>
+// 					handleMousePos(e, i)
+// 				);
+// 				media.addEventListener("mouseleave", () => handleMouseLeave(i));
+
+// 				const bounds = media.getBoundingClientRect();
+
+// 				// Create individual canvas for this image
+// 				let canvas = media.nextElementSibling;
+// 				if (!canvas || canvas.tagName !== "CANVAS") {
+// 					canvas = document.createElement("canvas");
+// 					canvas.style.position = "absolute";
+// 					canvas.style.top = "0";
+// 					canvas.style.left = "0";
+// 					canvas.style.width = "100%";
+// 					canvas.style.height = "100%";
+// 					canvas.style.pointerEvents = "none";
+// 					canvas.style.zIndex = "0";
+
+// 					// Make parent relative if not already positioned
+// 					const parent = media.parentNode;
+// 					const parentStyle = getComputedStyle(parent);
+// 					if (parentStyle.position === "static") {
+// 						parent.style.position = "relative";
+// 					}
+
+// 					// Insert canvas as next sibling to media element
+// 					media.parentNode.insertBefore(canvas, media.nextSibling);
+// 					// console.log(`Canvas created for image ${i}`, canvas);
+// 				} else {
+// 					console.log(`Canvas already exists for image ${i}`, canvas);
+// 				}
+
+// 				// Verify canvas is properly referenced
+// 				if (!canvas) {
+// 					console.error(`Canvas is null for image ${i}!`);
+// 					return null;
+// 				}
+
+// 				// Create individual scene and renderer for this image
+// 				const individualScene = new THREE.Scene();
+// 				const camera = new THREE.PerspectiveCamera(
+// 					50,
+// 					bounds.width / bounds.height,
+// 					10,
+// 					1000
+// 				);
+// 				camera.position.z = CAMERA_POS;
+// 				camera.fov = calcFov(CAMERA_POS);
+// 				camera.updateProjectionMatrix();
+
+// 				try {
+// 					const renderer = new THREE.WebGLRenderer({
+// 						canvas: canvas,
+// 						alpha: true,
+// 						antialias: true,
+// 					});
+// 					renderer.setSize(bounds.width, bounds.height);
+// 					renderer.setPixelRatio(
+// 						Math.min(window.devicePixelRatio, 2)
+// 					);
+// 					// Set clear color to transparent
+// 					renderer.setClearColor(0x000000, 0);
+
+// 					const imageMaterial = material.clone();
+// 					const imageMesh = new THREE.Mesh(geometry, imageMaterial);
+
+// 					let texture = null;
+
+// 					// Create texture with proper CORS and WebGL handling
+// 					const createTexture = (imageElement) => {
+// 						const tex = new THREE.Texture(imageElement);
+// 						tex.wrapS = THREE.ClampToEdgeWrapping;
+// 						tex.wrapT = THREE.ClampToEdgeWrapping;
+// 						tex.minFilter = THREE.LinearFilter;
+// 						tex.magFilter = THREE.LinearFilter;
+// 						tex.generateMipmaps = false;
+// 						tex.needsUpdate = true;
+// 						return tex;
+// 					};
+
+// 					// Try to load image with CORS handling
+// 					if (media.src && media.tagName.toLowerCase() === "img") {
+// 						const img = new Image();
+// 						img.crossOrigin = "anonymous";
+
+// 						img.onload = () => {
+// 							texture = createTexture(img);
+// 							imageMaterial.uniforms.uTexture.value = texture;
+// 							imageMaterial.uniforms.uTextureSize.value.x =
+// 								img.naturalWidth || 1;
+// 							imageMaterial.uniforms.uTextureSize.value.y =
+// 								img.naturalHeight || 1;
+// 						};
+
+// 						img.onerror = () => {
+// 							// Fallback: use original image without CORS
+// 							console.warn(
+// 								"CORS loading failed for image, using original:",
+// 								media.src
+// 							);
+// 							texture = createTexture(media);
+// 							imageMaterial.uniforms.uTexture.value = texture;
+// 							imageMaterial.uniforms.uTextureSize.value.x =
+// 								media.naturalWidth || 1;
+// 							imageMaterial.uniforms.uTextureSize.value.y =
+// 								media.naturalHeight || 1;
+// 						};
+
+// 						img.src = media.src;
+// 					} else {
+// 						// Fallback for non-image elements or images without src
+// 						texture = createTexture(media);
+// 						imageMaterial.uniforms.uTexture.value = texture;
+// 						imageMaterial.uniforms.uTextureSize.value.x =
+// 							media.naturalWidth || 1;
+// 						imageMaterial.uniforms.uTextureSize.value.y =
+// 							media.naturalHeight || 1;
+// 					}
+
+// 					imageMaterial.uniforms.uQuadSize.value.x = bounds.width;
+// 					imageMaterial.uniforms.uQuadSize.value.y = bounds.height;
+// 					imageMaterial.uniforms.uBorderRadius.value =
+// 						getComputedStyle(media).borderRadius.replace("px", "");
+
+// 					// Calculate proper scale to fill viewport while maintaining proper deformation
+// 					const fov = camera.fov * (Math.PI / 180);
+// 					const distance = camera.position.z;
+// 					const height = 2 * Math.tan(fov / 2) * distance;
+// 					const width = height * camera.aspect;
+
+// 					// Scale to fill viewport for proper rendering
+// 					imageMesh.scale.set(width, height, 1);
+// 					imageMesh.position.set(0, 0, 0);
+
+// 					individualScene.add(imageMesh);
+
+// 					// Check for hover-only mode using dedicated attribute
+// 					const hoverOnly =
+// 						media.getAttribute("data-webgl-hover-only") === "true";
+
+// 					return {
+// 						media,
+// 						canvas,
+// 						scene: individualScene,
+// 						camera,
+// 						renderer,
+// 						material: imageMaterial,
+// 						mesh: imageMesh,
+// 						width: bounds.width,
+// 						height: bounds.height,
+// 						top: bounds.top + scrollY,
+// 						left: bounds.left,
+// 						isInView:
+// 							bounds.top >= -500 &&
+// 							bounds.top <= window.innerHeight + 500,
+// 						mouseEnter: 0,
+// 						hoverOnly, // Store the hover-only setting
+// 						mouseOverPos: {
+// 							current: {
+// 								x: 0.5,
+// 								y: 0.5,
+// 							},
+// 							target: {
+// 								x: 0.5,
+// 								y: 0.5,
+// 							},
+// 						},
+// 					};
+// 				} catch (error) {
+// 					console.error(
+// 						`Failed to create WebGL renderer for image ${i}:`,
+// 						error
+// 					);
+// 					return null;
+// 				}
+// 			})
+// 			.filter(Boolean); // Remove any null entries
+// 	};
+
+// 	// Shader setup
+// 	let observer;
+// 	let mediaStore;
+// 	let geometry;
+// 	let material;
+
+// 	// create intersection observer to only render in view elements
+// 	observer = new IntersectionObserver(
+// 		(entries) => {
+// 			entries.forEach((entry) => {
+// 				const index = entry.target.dataset.index;
+
+// 				if (index) {
+// 					mediaStore[parseInt(index)].isInView = entry.isIntersecting;
+// 				}
+// 			});
+// 		},
+// 		{ rootMargin: "500px 0px 500px 0px" }
+// 	);
+
+// 	// geometry and material template (will be cloned for each image)
+// 	geometry = new THREE.PlaneGeometry(1, 1, 100, 100);
+// 	material = new THREE.ShaderMaterial({
+// 		uniforms: {
+// 			uResolution: {
+// 				value: new THREE.Vector2(window.innerWidth, window.innerHeight),
+// 			},
+// 			uTime: { value: 0 },
+// 			uCursor: { value: new THREE.Vector2(0.5, 0.5) },
+// 			uScrollVelocity: { value: 0 },
+// 			uTexture: { value: null },
+// 			uTextureSize: { value: new THREE.Vector2(100, 100) },
+// 			uQuadSize: { value: new THREE.Vector2(100, 100) },
+// 			uBorderRadius: { value: 0 },
+// 			uMouseEnter: { value: 0 },
+// 			uMouseOverPos: { value: new THREE.Vector2(0.5, 0.5) },
+// 		},
+// 		vertexShader: effectVertex,
+// 		fragmentShader: effectFragment,
+// 		glslVersion: THREE.GLSL3,
+// 	});
+
+// 	// render loop - now renders each individual canvas
+// 	const render = (time = 0) => {
+// 		time /= 1000;
+
+// 		if (!mediaStore || mediaStore.length === 0) {
+// 			requestAnimationFrame(render);
+// 			return;
+// 		}
+
+// 		mediaStore.forEach((object) => {
+// 			if (!object) return; // Skip null objects
+
+// 			if (object.isInView) {
+// 				object.mouseOverPos.current.x = lerp(
+// 					object.mouseOverPos.current.x,
+// 					object.mouseOverPos.target.x,
+// 					0.05
+// 				);
+// 				object.mouseOverPos.current.y = lerp(
+// 					object.mouseOverPos.current.y,
+// 					object.mouseOverPos.target.y,
+// 					0.05
+// 				);
+
+// 				object.material.uniforms.uResolution.value.x = object.width;
+// 				object.material.uniforms.uResolution.value.y = object.height;
+// 				object.material.uniforms.uTime.value = time;
+// 				object.material.uniforms.uCursor.value.x = cursorPos.current.x;
+// 				object.material.uniforms.uCursor.value.y = cursorPos.current.y;
+// 				// Apply scroll velocity only if not hover-only mode
+// 				object.material.uniforms.uScrollVelocity.value =
+// 					object.hoverOnly ? 0 : scroll.scrollVelocity;
+// 				object.material.uniforms.uMouseOverPos.value.x =
+// 					object.mouseOverPos.current.x;
+// 				object.material.uniforms.uMouseOverPos.value.y =
+// 					object.mouseOverPos.current.y;
+// 				object.material.uniforms.uMouseEnter.value = object.mouseEnter;
+
+// 				// Render this individual canvas
+// 				object.renderer.render(object.scene, object.camera);
+// 			}
+// 		});
+
+// 		shaderRenderLoop = requestAnimationFrame(render);
+// 	};
+
+// 	const handleResize = debounce(() => {
+// 		mediaStore.forEach((object) => {
+// 			const bounds = object.media.getBoundingClientRect();
+
+// 			// Update canvas size
+// 			object.renderer.setSize(bounds.width, bounds.height);
+
+// 			// Update camera aspect ratio
+// 			object.camera.aspect = bounds.width / bounds.height;
+// 			object.camera.fov = calcFov(CAMERA_POS);
+// 			object.camera.updateProjectionMatrix();
+
+// 			// Recalculate scale to fill viewport
+// 			const fov = object.camera.fov * (Math.PI / 180);
+// 			const distance = object.camera.position.z;
+// 			const height = 2 * Math.tan(fov / 2) * distance;
+// 			const width = height * object.camera.aspect;
+
+// 			object.mesh.scale.set(width, height, 1);
+// 			object.width = bounds.width;
+// 			object.height = bounds.height;
+// 			object.top = bounds.top + scroll.scrollY;
+// 			object.left = bounds.left;
+// 			object.isInView =
+// 				bounds.top >= -500 && bounds.top <= window.innerHeight + 500;
+
+// 			// Update material uniforms
+// 			object.material.uniforms.uResolution.value.x = bounds.width;
+// 			object.material.uniforms.uResolution.value.y = bounds.height;
+// 			object.material.uniforms.uTextureSize.value.x =
+// 				object.media.naturalWidth || 1;
+// 			object.material.uniforms.uTextureSize.value.y =
+// 				object.media.naturalHeight || 1;
+// 			object.material.uniforms.uQuadSize.value.x = bounds.width;
+// 			object.material.uniforms.uQuadSize.value.y = bounds.height;
+// 			object.material.uniforms.uBorderRadius.value = getComputedStyle(
+// 				object.media
+// 			).borderRadius.replace("px", "");
+// 		});
+// 	});
+
+// 	window.addEventListener("resize", handleResize);
+
+// 	// Add the preloader logic
+// 	// media details
+// 	setMediaStore(scroll.scrollY);
+
+// 	shaderRenderLoop = requestAnimationFrame(render);
+// }
+
+// // Initialize when DOM is ready
+// if (document.readyState === "loading") {
+// 	document.addEventListener("DOMContentLoaded", initShaderOnScroll);
+// } else {
+// 	// DOM is already ready
+// 	initShaderOnScroll();
+// }
 
 function initSplit() {
 	const lineTargets = document.querySelectorAll('[data-split="lines"]');
@@ -785,7 +1192,9 @@ function horizontalScrollSetup() {
 				});
 
 			sections.forEach((section) => {
-				const targetLines = gsap.utils.toArray("[data-split] .line");
+				const targetLines = gsap.utils.toArray(
+					"[data-split]:not([data-lines-reveal='true']) .line"
+				);
 
 				if (!targetLines.length) return;
 
@@ -801,9 +1210,9 @@ function horizontalScrollSetup() {
 						{ yPercent: 100 },
 						{
 							yPercent: 0,
-							stagger: { each: 0.025 },
+							stagger: 0.1,
 							onComplete: () => {
-								gsap.set(line, { clearProps: "yPercent" });
+								gsap.set(line, { clearProps: "transform" });
 							},
 						}
 					);
@@ -1284,6 +1693,8 @@ function journalAnim() {
 			from: "start",
 		});
 
+		let isTransitioning = false;
+
 		const swiperInstance = new Swiper(swiperEl, {
 			slidesPerView: "auto",
 			effect: "fade",
@@ -1294,6 +1705,18 @@ function journalAnim() {
 			},
 			speed: 1200,
 			on: {
+				slideChangeTransitionStart: () => {
+					isTransitioning = true;
+					links.forEach(
+						(link) => (link.style.pointerEvents = "none")
+					);
+				},
+				slideChangeTransitionEnd: () => {
+					isTransitioning = false;
+					links.forEach(
+						(link) => (link.style.pointerEvents = "auto")
+					);
+				},
 				slideChange: (swiper) => {
 					gsap.utils
 						.toArray(".swiper-slide.is-journal")
@@ -1589,6 +2012,8 @@ function ethosDetailAnim() {
 			from: "start",
 		});
 
+		let isTransitioning = false;
+
 		const swiperInstance = new Swiper(swiperEl, {
 			slidesPerView: "auto",
 			effect: "fade",
@@ -1599,6 +2024,18 @@ function ethosDetailAnim() {
 			},
 			speed: 1200,
 			on: {
+				slideChangeTransitionStart: () => {
+					isTransitioning = true;
+					links.forEach(
+						(link) => (link.style.pointerEvents = "none")
+					);
+				},
+				slideChangeTransitionEnd: () => {
+					isTransitioning = false;
+					links.forEach(
+						(link) => (link.style.pointerEvents = "auto")
+					);
+				},
 				slideChange: (swiper) => {
 					gsap.utils
 						.toArray(".swiper-slide.is-ethos")
@@ -1635,7 +2072,60 @@ function ethosDetailAnim() {
 }
 
 // Membership page
-function heroMemberAnim() {}
+function heroMemberAnim() {
+	const section = document.querySelector(".hero_member_wrap");
+
+	if (!section) return;
+	gsap.context(() => {
+		gsap.set(".btn_main_wrap", { pointerEvents: "none" });
+
+		gsap.timeline({
+			defaults: { duration: 1 },
+			onComplete: () => {
+				gsap.set(".btn_main_wrap", { clearProps: "pointerEvents" });
+			},
+		})
+			.fromTo(
+				".hero_member_visual",
+				{
+					clipPath: "inset(0% 0% 100% 0%)",
+					stagger: 0.1,
+				},
+				{
+					clipPath: "inset(0% 0% 0% 0%)",
+					stagger: 0.1,
+					delay: 0.4,
+				}
+			)
+			.from(".g_visual_wrap", { scale: 1.2, stagger: 0.1 }, "<")
+			.from(
+				".hero_member_title .char",
+				{ yPercent: 110, stagger: 0.015 },
+				"<"
+			)
+			.from(
+				".hero_member_subtitle .word",
+				{ yPercent: 110, stagger: 0.1 },
+				"<"
+			)
+			.from(
+				".hero_member_text .line",
+				{ yPercent: 110, stagger: 0.01 },
+				"<25%"
+			)
+			.from(
+				".btn_main_text .char",
+				{ yPercent: 110, stagger: 0.01 },
+				"<25%"
+			)
+			.fromTo(
+				".btn_main_wrap",
+				{ "--stroke-radius": "0turn" },
+				{ "--stroke-radius": "1turn" },
+				"<"
+			);
+	}, section);
+}
 
 function visionAnim() {
 	const section = document.querySelector(".vision_2_wrap");
@@ -1700,7 +2190,193 @@ function impactAnim() {
 	}, section);
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+// Customer stories page
+function customerStoriesAnim() {
+	const section = document.querySelector(".hero_stories_wrap");
+
+	if (!section) return;
+
+	gsap.context(() => {
+		const swiperEl = document.querySelector(".swiper.is-hero-stories");
+		const links = gsap.utils.toArray(".hero_stories_item_link", section);
+		const buttons = gsap.utils.toArray(".btn_main_wrap a");
+		const container = document.querySelector(".hero_stories_bg_flip");
+		const visual = gsap.utils.toArray(".hero_stories_visual_wrap");
+
+		// window.addEventListener("pageshow", (event) => {
+		// 	if (event.persisted) {
+		// 		window.location.reload();
+		// 	}
+		// });
+
+		// buttons.forEach((button, index) => {
+		// 	button.addEventListener("mouseenter", (e) => {
+		// 		e.preventDefault();
+		// 		linkToFlip(button, container, visual[index]);
+		// 	});
+		// });
+
+		const prevDelay = gsap.utils.distribute({
+			base: 0,
+			amount: 0.25,
+			from: "start",
+		});
+
+		const activeDelay = gsap.utils.distribute({
+			base: 0.35,
+			amount: 0.25,
+			from: "start",
+		});
+
+		const tl = gsap
+			.timeline({
+				onComplete: () => {
+					gsap.set(".btn_main_wrap", { clearProps: "pointerEvents" });
+				},
+			})
+			.set(".btn_main_wrap", { pointerEvents: "none" })
+			.from(links, {
+				xPercent: 100,
+				autoAlpha: 0,
+				stagger: 0.05,
+				duration: 1.5,
+			})
+			.fromTo(
+				".hero_stories_visual_wrap",
+				{
+					clipPath: "inset(0 0 100% 0)",
+				},
+				{
+					clipPath: "inset(0 0 0% 0)",
+					duration: 1.5,
+				},
+				"<"
+			)
+			.from(".g_visual_wrap", { scale: 1.2, duration: 1.5 }, "<")
+			.fromTo(
+				".btn_main_wrap",
+				{ "--stroke-radius": "0turn" },
+				{ "--stroke-radius": "1turn", duration: 1 },
+				"<50%"
+			)
+			.from(
+				".btn_main_text .char",
+				{
+					yPercent: 110,
+					stagger: 0.01,
+					duration: 1,
+					clearProps: "transform",
+				},
+				"<"
+			);
+
+		let isTransitioning = false;
+
+		const swiperInstance = new Swiper(swiperEl, {
+			slidesPerView: "auto",
+			effect: "fade",
+			allowTouchMove: false,
+			preventInteractionOnTransition: true,
+			slideActiveClass: "is-active",
+			fadeEffect: {
+				crossFade: true,
+			},
+			speed: 1200,
+			on: {
+				slideChangeTransitionStart: () => {
+					isTransitioning = true;
+					links.forEach(
+						(link) => (link.style.pointerEvents = "none")
+					);
+				},
+				slideChangeTransitionEnd: () => {
+					isTransitioning = false;
+					links.forEach(
+						(link) => (link.style.pointerEvents = "auto")
+					);
+				},
+				slideChange: (swiper) => {
+					gsap.utils
+						.toArray(".swiper-slide.is-hero-stories")
+						.forEach((slide, index) => {
+							const lines = slide.querySelectorAll(
+								".hero_stories_text .line"
+							);
+
+							const isActive = index === swiper.activeIndex;
+
+							const delay = isActive ? activeDelay : prevDelay;
+
+							gsap.set(lines, {
+								transitionDelay: delay,
+							});
+						});
+				},
+			},
+		});
+
+		links.forEach((el, index) => {
+			links[0].classList.add("is-active");
+			el.addEventListener("mouseenter", () => {
+				// Prevent interaction if already transitioning
+				if (isTransitioning) return;
+
+				swiperInstance.slideTo(index);
+
+				links.forEach((element) =>
+					element.classList.remove("is-active")
+				);
+
+				el.classList.add("is-active");
+			});
+		});
+	}, section);
+}
+
+function initAllAnimation() {
+	const buttonElements = document.querySelectorAll('[data-block="button"]');
+
+	buttonElements.forEach((buttonElement) => {
+		new Button(buttonElement);
+	});
+
+	customCursor();
+	applySlowZoomEffect();
+
+	// init global function
+	initSplit();
+	textCharsReveal();
+	textWordsReveal();
+	textLinesReveal();
+	buttonHoverSetup();
+	footerLogoReveal();
+	horizontalScrollSetup();
+
+	// init homepage function
+	heroAnim();
+	menuAnim();
+	experienceAnim();
+	inspireAnim();
+	journalAnim();
+
+	// init about page function
+	heroAboutAnim();
+	ideaAnim();
+	inspiredGlobalAnim();
+	inviteAnim();
+	ethosDetailAnim();
+
+	// init membership page function
+	heroMemberAnim();
+	impactAnim();
+
+	// init customer stories page function
+	customerStoriesAnim();
+
+	gsap.set('[data-prevent-flicker="true"]', { autoAlpha: 1 });
+}
+
+/* document.addEventListener("DOMContentLoaded", () => {
 	const buttonElements = document.querySelectorAll('[data-block="button"]');
 
 	buttonElements.forEach((buttonElement) => {
@@ -1736,10 +2412,101 @@ document.addEventListener("DOMContentLoaded", () => {
 			ethosDetailAnim();
 
 			// init membership page function
-			// visionAnim();
+			heroMemberAnim();
 			impactAnim();
+
+			// init customer stories page function
+			customerStoriesAnim();
 
 			gsap.set('[data-prevent-flicker="true"]', { autoAlpha: 1 });
 		});
 	});
+}); */
+
+document.addEventListener("DOMContentLoaded", () => {
+	document.fonts.ready.then(() => {
+		preloadImages().then(() => {
+			initShaderOnScroll();
+			initAllAnimation();
+		});
+	});
 });
+
+// // Barba.js setup
+// barba.hooks.beforeLeave(() => {
+// 	// Clean up animations before leaving
+// 	cleanupAnimations();
+// 	cleanupShaderOnScroll();
+
+// 	shaderInitialized = false;
+// 	if (shaderRenderLoop) {
+// 		cancelAnimationFrame(shaderRenderLoop);
+// 		shaderRenderLoop = null;
+// 	}
+// });
+
+// barba.hooks.enter((data) => {
+// 	// Prepare next container
+// 	gsap.set(data.next.container, {
+// 		position: "fixed",
+// 		top: 0,
+// 		left: 0,
+// 		width: "100%",
+// 	});
+// });
+
+// barba.hooks.afterEnter((data) => {
+// 	// Reset container position
+// 	gsap.set(data.next.container, { position: "relative" });
+
+// 	// Scroll to top
+// 	window.scrollTo(0, 0);
+// 	lenis.scrollTo(0, { immediate: true });
+
+// 	resetWebflow(data);
+// });
+
+// barba.hooks.after((data) => {
+// 	// Wait for fonts and images before initializing animations
+// 	document.fonts.ready.then(() => {
+// 		preloadImages().then(() => {
+// 			// Reinitialize all animations
+// 			initShaderOnScroll();
+// 			initAllAnimation();
+
+// 			// Refresh ScrollTrigger after a short delay to ensure DOM is ready
+// 			requestAnimationFrame(() => {
+// 				ScrollTrigger.refresh();
+// 			});
+// 		});
+// 	});
+// });
+
+// barba.init({
+// 	preventRunning: true,
+// 	debug: true,
+// 	transitions: [
+// 		{
+// 			name: "default-transition",
+// 			sync: true,
+// 			enter(data) {
+// 				let tl = gsap.timeline({
+// 					defaults: { duration: 1, ease: "power2.out" },
+// 				});
+// 				tl.to(data.current.container, { opacity: 0, scale: 0.9 });
+// 				tl.from(data.next.container, { y: "100vh" }, "<");
+// 				return tl;
+// 			},
+// 		},
+// 	],
+// 	views: [
+// 		{
+// 			namespace: "home",
+// 			beforeEnter() {},
+// 		},
+// 		{
+// 			namespace: "about",
+// 			beforeEnter() {},
+// 		},
+// 	],
+// });

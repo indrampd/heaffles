@@ -2232,7 +2232,7 @@ function customerStoriesAnim() {
 			})
 			.set(".btn_main_wrap", { pointerEvents: "none" })
 			.from(links, {
-				xPercent: 100,
+				yPercent: 110,
 				autoAlpha: 0,
 				stagger: 0.05,
 				duration: 1.5,
@@ -2563,20 +2563,37 @@ function heroJournalAnim() {
 			btn.addEventListener("click", () => {
 				gsap.set(".hero_slider_visual", { autoAlpha: 0 });
 
-				gsap.delayedCall(0.4, () => {
-					gsap.fromTo(
-						".hero_slider_visual",
-						{
-							autoAlpha: 0,
-							clipPath: "inset(50% 0% 50% 0%",
-						},
-						{
-							autoAlpha: 1,
-							duration: 1,
-							clipPath: "inset(0% 0% 0% 0%)",
-							stagger: 0.1,
-						}
-					);
+				gsap.delayedCall(0.2, () => {
+					gsap.timeline()
+						.fromTo(
+							".hero_slider_visual",
+							{
+								autoAlpha: 0,
+								clipPath: "inset(50% 0% 50% 0%",
+							},
+							{
+								autoAlpha: 1,
+								duration: 1,
+								clipPath: "inset(0% 0% 0% 0%)",
+								stagger: {
+									each: 0.1,
+									from: "center",
+								},
+							}
+						)
+						.fromTo(
+							".g_visual_wrap",
+							{ scale: 1.2 },
+							{
+								scale: 1,
+								duration: 1,
+								stagger: {
+									each: 0.1,
+									from: "center",
+								},
+							},
+							"<"
+						);
 				});
 			});
 		});
@@ -2603,6 +2620,91 @@ function heroJournalAnim() {
 			amount: 0.25,
 			from: "start",
 		});
+
+		const tl = gsap.timeline({
+			onComplete: () => {
+				gsap.set(".btn_main_wrap", { clearProps: "pointerEvents" });
+			},
+		});
+		tl.set(".btn_main_wrap", { pointerEvents: "none" });
+		tl.fromTo(
+			".hero_slider_visual",
+			{
+				autoAlpha: 0,
+				clipPath: "inset(50% 0% 50% 0%",
+			},
+			{
+				autoAlpha: 1,
+				duration: 1,
+				clipPath: "inset(0% 0% 0% 0%)",
+				stagger: {
+					each: 0.1,
+					from: "center",
+				},
+			}
+		).fromTo(
+			".g_visual_wrap",
+			{ scale: 1.2 },
+			{
+				scale: 1,
+				duration: 1,
+				stagger: {
+					each: 0.1,
+					from: "center",
+				},
+			},
+			"<"
+		);
+
+		tl.from(
+			".hero_journal_title .word",
+			{
+				yPercent: 110,
+				stagger: 0.1,
+				duration: 1,
+			},
+			"<25%"
+		);
+
+		tl.from(
+			".radio_btn_label",
+			{
+				yPercent: 110,
+				stagger: 0.1,
+				duration: 1,
+			},
+			"<"
+		);
+
+		tl.fromTo(
+			".btn_main_wrap",
+			{
+				"--stroke-radius": "0turn",
+			},
+			{
+				"--stroke-radius": "1turn",
+			},
+			"<"
+		).from(
+			".btn_main_text .char",
+			{
+				yPercent: 110,
+				stagger: 0.01,
+				duration: 1,
+				clearProps: "transform",
+			},
+			"<"
+		);
+
+		tl.from(
+			".hero_journal_number > div",
+			{
+				yPercent: 110,
+				autoAlpha: 0,
+				duration: 1,
+			},
+			"<25%"
+		);
 
 		function initSwiper() {
 			if (isInitializing) return;
@@ -2647,10 +2749,10 @@ function heroJournalAnim() {
 					// Initialize Visual Swiper
 					swiperVisualInstance = new Swiper(swiperVisualEl, {
 						modules: [EffectPanorama],
-						direction: "vertical",
+						direction: "horizontal",
 						slidesPerView: "auto",
 						centeredSlides: true,
-						spaceBetween: 32,
+						spaceBetween: 16,
 						slideToClickedSlide: true,
 						loop: enableLoop,
 						watchSlidesProgress: true,
@@ -2661,6 +2763,12 @@ function heroJournalAnim() {
 						panoramaEffect: { depth: 1000, rotate: 36 },
 						mousewheel: { enabled: true },
 						speed: 800,
+						breakpoints: {
+							992: {
+								direction: "vertical",
+								spaceBetween: 32,
+							},
+						},
 					});
 
 					// Initialize Content Swiper
@@ -2675,6 +2783,26 @@ function heroJournalAnim() {
 						loop: enableLoop,
 						speed: 1200,
 						// The slideChange logic seems fine, no changes needed here.
+						slideChange: (swiper) => {
+							gsap.utils
+								.toArray(".swiper-slide.is-journal-content")
+								.forEach((slide, index) => {
+									const lines = slide.querySelectorAll(
+										".hero_slider_text .line"
+									);
+
+									const isActive =
+										index === swiper.activeIndex;
+
+									const delay = isActive
+										? activeDelay
+										: prevDelay;
+
+									gsap.set(lines, {
+										transitionDelay: delay,
+									});
+								});
+						},
 					});
 
 					// Update pagination and sync swipers (your existing logic is good)

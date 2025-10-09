@@ -2782,27 +2782,29 @@ function heroJournalAnim() {
 						slideActiveClass: "is-active",
 						loop: enableLoop,
 						speed: 1200,
-						// The slideChange logic seems fine, no changes needed here.
-						slideChange: (swiper) => {
-							gsap.utils
-								.toArray(".swiper-slide.is-journal-content")
-								.forEach((slide, index) => {
-									const lines = slide.querySelectorAll(
-										".hero_slider_text .line"
-									);
+						on: {
+							// The slideChange logic seems fine, no changes needed here.
+							slideChange: (swiper) => {
+								gsap.utils
+									.toArray(".swiper-slide.is-journal-content")
+									.forEach((slide, index) => {
+										const lines = slide.querySelectorAll(
+											".hero_slider_text .line"
+										);
 
-									const isActive =
-										index === swiper.activeIndex;
+										const isActive =
+											index === swiper.activeIndex;
 
-									const delay = isActive
-										? activeDelay
-										: prevDelay;
+										const delay = isActive
+											? activeDelay
+											: prevDelay;
 
-									gsap.set(lines, {
-										transitionDelay: delay,
+										gsap.set(lines, {
+											transitionDelay: delay,
+										});
 									});
-								});
-						},
+							},
+						}
 					});
 
 					// Update pagination and sync swipers (your existing logic is good)

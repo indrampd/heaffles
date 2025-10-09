@@ -2114,7 +2114,7 @@ function heroMemberAnim() {
 			)
 			.from(
 				".btn_main_text .char",
-				{ yPercent: 110, stagger: 0.01 },
+				{ yPercent: 110, stagger: 0.01, clearProps: "transform" },
 				"<25%"
 			)
 			.fromTo(

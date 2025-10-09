@@ -2692,7 +2692,7 @@ function initAllAnimation() {
 	textCharsReveal();
 	textWordsReveal();
 	textLinesReveal();
-	buttonHoverSetup();
+	// buttonHoverSetup();
 	footerLogoReveal();
 	horizontalScrollSetup();
 

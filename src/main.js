@@ -913,6 +913,7 @@ function initSplit() {
 			type: "lines",
 			linesClass: "line",
 			mask: "lines",
+			propIndex: true,
 		});
 	}
 
@@ -922,6 +923,7 @@ function initSplit() {
 			wordsClass: "word",
 			linesClass: "line",
 			mask: "lines",
+			propIndex: true,
 		});
 	}
 
@@ -931,6 +933,7 @@ function initSplit() {
 			charsClass: "char",
 			wordsClass: "word",
 			mask: "words",
+			propIndex: true,
 		});
 	}
 }
@@ -2329,225 +2332,6 @@ function customerStoriesAnim() {
 	}, section);
 }
 
-// Journal page
-// function heroJournalAnim() {
-// 	const section = document.querySelector(".hero_journal_wrap");
-
-// 	if (!section) return;
-
-// 	gsap.context(() => {
-// 		let swiperVisualInstance = null;
-// 		let swiperContentInstance = null;
-// 		let isInitializing = false;
-
-// 		function destroySwipers() {
-// 			if (swiperVisualInstance) {
-// 				swiperVisualInstance.destroy(true, true);
-// 				swiperVisualInstance = null;
-// 			}
-// 			if (swiperContentInstance) {
-// 				swiperContentInstance.destroy(true, true);
-// 				swiperContentInstance = null;
-// 			}
-// 		}
-
-// 		const prevDelay = gsap.utils.distribute({
-// 			base: 0,
-// 			amount: 0.25,
-// 			from: "start",
-// 		});
-
-// 		const activeDelay = gsap.utils.distribute({
-// 			base: 0.35,
-// 			amount: 0.25,
-// 			from: "start",
-// 		});
-
-// 		function initSwiper() {
-// 			if (isInitializing) return;
-// 			isInitializing = true;
-
-// 			// Destroy existing instances first
-// 			destroySwipers();
-
-// 			const swiperVisualEl = document.querySelector(
-// 				".swiper.is-journal-visual"
-// 			);
-// 			const swiperContentEl = document.querySelector(
-// 				".swiper.is-journal-content"
-// 			);
-// 			const currentNumberEl = document.querySelector(
-// 				"[data-swiper-pagination=current]"
-// 			);
-// 			const totalNumberEl = document.querySelector(
-// 				"[data-swiper-pagination=total]"
-// 			);
-
-// 			if (!swiperVisualEl || !swiperContentEl) {
-// 				console.warn("Swiper elements not found");
-// 				isInitializing = false;
-// 				return;
-// 			}
-
-// 			// Count actual slides (non-duplicate)
-// 			const visualSlides = swiperVisualEl.querySelectorAll(
-// 				".swiper-slide:not(.swiper-slide-duplicate)"
-// 			);
-// 			const contentSlides = swiperContentEl.querySelectorAll(
-// 				".swiper-slide:not(.swiper-slide-duplicate)"
-// 			);
-
-// 			const slideCount = Math.max(
-// 				visualSlides.length,
-// 				contentSlides.length
-// 			);
-// 			let enableLoop = slideCount > 3;
-
-// 			console.log(`Found ${slideCount} slides, loop: ${enableLoop}`);
-
-// 			// Wait a tick for DOM to settle after CMS filter
-// 			requestAnimationFrame(() => {
-// 				try {
-// 					// Initialize Visual Swiper
-// 					swiperVisualInstance = new Swiper(swiperVisualEl, {
-// 						modules: [EffectPanorama],
-// 						direction: "vertical",
-// 						slidesPerView: "auto",
-// 						centeredSlides: true,
-// 						spaceBetween: 32,
-// 						slideToClickedSlide: true,
-// 						loop: enableLoop,
-// 						watchSlidesProgress: true,
-// 						lazy: {
-// 							loadPrevNext: true,
-// 						},
-// 						effect: "panorama",
-// 						panoramaEffect: { depth: 1000, rotate: 36 },
-// 						mousewheel: { enabled: true },
-// 						speed: 800,
-// 					});
-
-// 					// Initialize Content Swiper
-// 					swiperContentInstance = new Swiper(swiperContentEl, {
-// 						slidesPerView: 1,
-// 						effect: "fade",
-// 						fadeEffect: {
-// 							crossFade: true,
-// 						},
-// 						allowTouchMove: false,
-// 						slideActiveClass: "is-active",
-// 						loop: enableLoop,
-// 						speed: 1200,
-// 						slideChange: (swiper) => {
-// 							gsap.utils
-// 								.toArray(".swiper-slide.is-journal-content")
-// 								.forEach((slide, index) => {
-// 									const lines = slide.querySelectorAll(
-// 										".hero_slider_text .line"
-// 									);
-
-// 									const isActive =
-// 										index === swiper.activeIndex;
-
-// 									const delay = isActive
-// 										? activeDelay
-// 										: prevDelay;
-
-// 									gsap.set(lines, {
-// 										transitionDelay: delay,
-// 									});
-// 								});
-// 						},
-// 					});
-
-// 					// Update pagination
-// 					if (swiperVisualInstance && swiperVisualInstance.slides) {
-// 						const totalSlides = enableLoop
-// 							? swiperVisualInstance.slides.filter(
-// 									(slide) =>
-// 										!slide.classList.contains(
-// 											"swiper-slide-duplicate"
-// 										)
-// 							  ).length
-// 							: swiperVisualInstance.slides.length;
-
-// 						if (currentNumberEl && totalNumberEl) {
-// 							const currentIndex = enableLoop
-// 								? swiperVisualInstance.realIndex
-// 								: swiperVisualInstance.activeIndex;
-// 							currentNumberEl.innerHTML = currentIndex + 1;
-// 							totalNumberEl.innerHTML = totalSlides;
-// 						}
-// 					}
-
-// 					// Sync swipers
-// 					const syncHandler = () => {
-// 						const currentIndex = enableLoop
-// 							? swiperVisualInstance.realIndex
-// 							: swiperVisualInstance.activeIndex;
-
-// 						if (currentNumberEl) {
-// 							currentNumberEl.innerHTML = currentIndex + 1;
-// 						}
-
-// 						if (swiperContentInstance) {
-// 							if (enableLoop) {
-// 								swiperContentInstance.slideToLoop(
-// 									currentIndex,
-// 									1200,
-// 									false
-// 								);
-// 							} else {
-// 								swiperContentInstance.slideTo(
-// 									currentIndex,
-// 									1200,
-// 									false
-// 								);
-// 							}
-// 						}
-// 					};
-
-// 					if (enableLoop) {
-// 						swiperVisualInstance.on("realIndexChange", syncHandler);
-// 					} else {
-// 						swiperVisualInstance.on("slideChange", syncHandler);
-// 					}
-
-// 					console.log("Swipers initialized successfully");
-// 					isInitializing = false;
-// 				} catch (error) {
-// 					console.error("Error initializing swipers:", error);
-// 					isInitializing = false;
-// 				}
-// 			});
-// 		}
-
-// 		// Initial swiper setup
-// 		initSwiper();
-
-// 		// Finsweet CMS Filter integration
-// 		window.FinsweetAttributes ||= [];
-// 		window.FinsweetAttributes.push([
-// 			"list",
-// 			(listInstances) => {
-// 				console.log("Finsweet List instances:", listInstances);
-
-// 				const [listInstance] = listInstances;
-// 				if (!listInstance) return;
-
-// 				listInstance.addHook("render", (renderedItems) => {
-// 					initSwiper();
-// 				});
-// 			},
-// 		]);
-
-// 		// Cleanup on context kill
-// 		return () => {
-// 			console.log("Cleaning up swipers");
-// 			destroySwipers();
-// 		};
-// 	}, section);
-// }
 function heroJournalAnim() {
 	const section = document.querySelector(".hero_journal_wrap");
 
@@ -2804,7 +2588,7 @@ function heroJournalAnim() {
 										});
 									});
 							},
-						}
+						},
 					});
 
 					// Update pagination and sync swipers (your existing logic is good)
